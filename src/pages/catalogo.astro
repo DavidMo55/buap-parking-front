@@ -1,0 +1,189 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+// SSR habilitado para reflejar cambios en la DB al instante
+export const prerender = false;
+
+// Azure URL o Localhost
+const API_BASE_URL = import.meta.env.PUBLIC_API_URL || "http://localhost:8000";
+
+let vehiculos = [];
+let error = null;
+
+try {
+    // Usamos el endpoint maestro de vehículos
+    const res = await fetch(`${API_BASE_URL}/test-db`); 
+    if (!res.ok) throw new Error("No se pudo conectar con la base de datos central");
+    vehiculos = await res.json();
+} catch (e) {
+    error = e.message;
+}
+
+const tipos = [
+    { id: 'compacto', label: 'Compacto' },
+    { id: 'camioneta', label: 'Camioneta / SUV' },
+    { id: 'lujo', label: 'Lujo / Deportivo' }
+];
+---
+
+<Layout title="Catálogo Maestro - BUAP Parking">
+    <div class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+            <h2 class="text-4xl font-black text-white italic uppercase tracking-tighter leading-none">Registros Maestros</h2>
+            <p class="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] mt-3 bg-indigo-500/10 w-fit px-3 py-1 rounded-full border border-indigo-500/20">
+                Base de Datos Cloud Sincronizada
+            </p>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="window.location.reload()" class="p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all text-white text-xs font-bold">
+                🔄 Sincronizar
+            </button>
+        </div>
+    </div>
+
+    {error ? (
+        <div class="bg-red-500/10 border border-red-500/20 p-12 rounded-[3rem] text-center">
+            <span class="text-4xl block mb-4">⚠️</span>
+            <p class="text-red-400 font-black uppercase tracking-widest text-xs">{error}</p>
+        </div>
+    ) : (
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-10">
+            <div class="md:col-span-2 relative">
+                <span class="absolute inset-y-0 left-5 flex items-center text-slate-500">🔍</span>
+                <input 
+                    type="text" 
+                    id="searchInput"
+                    placeholder="Buscar por placa, marca o modelo..." 
+                    class="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-14 pr-6 text-white placeholder:text-slate-600 focus:border-indigo-500 transition-all outline-none"
+                />
+            </div>
+
+            <select id="filterTipo" class="bg-white/5 border border-white/10 text-slate-300 text-[10px] font-black rounded-2xl px-5 py-5 outline-none focus:border-indigo-500 uppercase tracking-widest">
+                <option value="">Todos los Tipos</option>
+                {tipos.map(t => <option value={t.id}>{t.label}</option>)}
+            </select>
+
+            <select id="filterColor" class="bg-white/5 border border-white/10 text-slate-300 text-[10px] font-black rounded-2xl px-5 py-5 outline-none focus:border-indigo-500 uppercase tracking-widest">
+                <option value="">Cualquier Color</option>
+                <option value="Blanco">Blanco</option>
+                <option value="Negro">Negro</option>
+                <option value="Gris">Gris</option>
+                <option value="Rojo">Rojo</option>
+                <option value="Azul">Azul</option>
+            </select>
+        </div>
+
+        <div id="vehiculosGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {vehiculos.map(v => (
+                <div 
+                    class="vehiculo-card bg-white/5 border border-white/10 rounded-[3rem] overflow-hidden group transition-all hover:bg-white/[0.07] hover:border-white/20"
+                    data-placa={v.placa}
+                    data-modelo={v.modelo || ''}
+                    data-marca={v.marca || ''}
+                    data-tipo={v.tipo || 'compacto'}
+                    data-color={v.color || ''}
+                >
+                    <div class="relative h-56 bg-black overflow-hidden">
+                        <img 
+                            src={v.ultima_foto || '/placeholder-car.jpg'} 
+                            class="w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700"
+                            onerror="this.src='https://placehold.co/600x400/0f172a/6366f1?text=Sin+Vista+Previa'"
+                        />
+                        <div class="absolute top-6 left-6">
+                            <span class="px-4 py-1.5 bg-black/60 backdrop-blur-md rounded-full text-[9px] font-black text-white uppercase tracking-widest border border-white/10">
+                                {v.tipo || 'estándar'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="p-8">
+                        <div class="flex justify-between items-start mb-6">
+                            <div>
+                                <h3 class="text-2xl font-black text-white italic uppercase tracking-tighter leading-none">
+                                    {v.marca} <span class="text-slate-500">{v.modelo}</span>
+                                </h3>
+                                <p class="text-lg font-mono text-indigo-400 mt-2 tracking-[0.2em]">{v.placa}</p>
+                            </div>
+                            <div 
+                                class="w-8 h-8 rounded-2xl border border-white/10 shadow-xl" 
+                                style={`background-color: ${v.color?.toLowerCase() || '#333'}`}
+                                title={`Color: ${v.color}`}
+                            ></div>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-6 border-t border-white/5">
+                            <div class="flex flex-col">
+                                <span class="text-[8px] text-slate-500 font-black uppercase tracking-widest">Color Detectado</span>
+                                <span class="text-xs text-white font-bold uppercase">{v.color || 'No definido'}</span>
+                            </div>
+                            <a 
+                                href={`/vehiculo/${v.placa}`}
+                                class="px-6 py-3 bg-indigo-600 rounded-xl text-[10px] font-black text-white uppercase tracking-widest hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20"
+                            >
+                                Perfil Completo
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
+
+        <div id="noResults" class="hidden text-center py-32 bg-white/5 border border-dashed border-white/10 rounded-[4rem]">
+            <span class="text-6xl block mb-6">🔍</span>
+            <p class="text-slate-500 font-black uppercase tracking-[0.3em] text-[10px]">No se encontraron vehículos registrados</p>
+        </div>
+    )}
+</Layout>
+
+<script>
+    const setupFilters = () => {
+        const searchInput = document.getElementById('searchInput') as HTMLInputElement;
+        const filterTipo = document.getElementById('filterTipo') as HTMLSelectElement;
+        const filterColor = document.getElementById('filterColor') as HTMLSelectElement;
+        const cards = document.querySelectorAll('.vehiculo-card');
+        const noResults = document.getElementById('noResults');
+        const grid = document.getElementById('vehiculosGrid');
+
+        if (!searchInput) return;
+
+        function filterData() {
+            const search = searchInput.value.toLowerCase();
+            const tipo = filterTipo.value.toLowerCase();
+            const color = filterColor.value.toLowerCase();
+
+            let visibleCount = 0;
+
+            cards.forEach((card: any) => {
+                const data = card.dataset;
+                const matchesSearch = data.placa.toLowerCase().includes(search) || 
+                                     data.modelo.toLowerCase().includes(search) ||
+                                     data.marca.toLowerCase().includes(search);
+                const matchesTipo = !tipo || data.tipo.toLowerCase() === tipo;
+                const matchesColor = !color || data.color.toLowerCase() === color;
+
+                if (matchesSearch && matchesTipo && matchesColor) {
+                    card.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            if (visibleCount === 0 && grid) {
+                noResults?.classList.remove('hidden');
+                grid.classList.add('hidden');
+            } else if (grid) {
+                noResults?.classList.add('hidden');
+                grid.classList.remove('hidden');
+            }
+        }
+
+        searchInput.addEventListener('input', filterData);
+        filterTipo.addEventListener('change', filterData);
+        filterColor.addEventListener('change', filterData);
+    }
+
+    setupFilters();
+    document.addEventListener('astro:after-swap', setupFilters);
+    document.addEventListener('astro:page-load', setupFilters);
+</script>

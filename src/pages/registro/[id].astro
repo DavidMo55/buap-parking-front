@@ -1,0 +1,215 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+export const prerender = false;
+
+const API_BASE_URL = import.meta.env.PUBLIC_API_URL || "http://localhost:8000";
+const { id } = Astro.params;
+
+let registro = null;
+let vehiculo = null;
+let historialCompleto = [];
+let error = null;
+
+try {
+  // 1. Obtener los datos del registro específico
+  const resReg = await fetch(`${API_BASE_URL}/vehiculo-por-registro/${id}`);
+  if (!resReg.ok) throw new Error('Registro no encontrado');
+  const dataReg = await resReg.json();
+  registro = dataReg.registro;
+  vehiculo = dataReg.vehiculo;
+
+  // 2. Obtener historial de estancias del vehículo por su placa
+  const resHist = await fetch(`${API_BASE_URL}/vehiculo/${vehiculo.placa}`);
+  if (resHist.ok) {
+    const dataHist = await resHist.json();
+    historialCompleto = dataHist.historial_fotos || [];
+  }
+} catch (e) {
+  error = e.message;
+}
+
+// Si falla la carga, volvemos al dashboard
+if (error || !registro) return Astro.redirect('/admin');
+
+const isDentro = registro.estado === 'dentro';
+const fechaEntrada = new Date(registro.fecha_ingreso).toLocaleString('es-MX', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+});
+---
+
+<Layout title={`Gestión - ${vehiculo.placa}`}>
+    <div class="mb-6 no-print">
+        <a href="/admin" class="group flex items-center gap-2 text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em] hover:text-white transition-all">
+            <span class="group-hover:-translate-x-1 transition-transform">←</span> Volver al Dashboard
+        </a>
+    </div>
+
+    <div class="print-only hidden flex-col items-center text-center p-10 border-[8px] border-black bg-white text-black font-sans">
+        <h1 class="text-4xl font-black italic mb-2 tracking-tighter">BUAP PARKING</h1>
+        <p class="text-sm font-bold border-b-4 border-black pb-4 mb-6 w-full uppercase tracking-widest">Comprobante de Ingreso</p>
+        
+        <div class="mb-8 w-full">
+            <p class="text-xs uppercase font-black mb-1">Vehículo / Placa</p>
+            <p class="text-7xl font-mono font-black border-2 border-black py-4 bg-black text-white">{vehiculo.placa}</p>
+        </div>
+
+        <div class="grid grid-cols-2 w-full border-b-4 border-black pb-8 mb-6">
+            <div class="border-r-4 border-black">
+                <p class="text-xs uppercase font-black mb-1">Nivel</p>
+                <p class="text-6xl font-black italic">0{registro.nivel}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase font-black mb-1">Cajón</p>
+                <p class="text-6xl font-black italic">#{registro.cajon}</p>
+            </div>
+        </div>
+
+        <div class="text-left w-full space-y-1">
+            <p class="text-[10px] font-black uppercase">Fecha Entrada: <span class="font-normal">{fechaEntrada}</span></p>
+            <p class="text-[10px] font-black uppercase">Marca/Modelo: <span class="font-normal">{vehiculo.marca} {vehiculo.modelo}</span></p>
+        </div>
+        
+        <p class="mt-12 text-[9px] font-bold uppercase tracking-tighter border-t border-black pt-4 w-full">Conserve este ticket para registrar su salida.</p>
+    </div>
+
+    <div class="no-print space-y-6">
+        <div class="bg-white/5 border border-white/10 rounded-[3rem] overflow-hidden backdrop-blur-xl shadow-2xl">
+            <div class="p-10 border-b border-white/10 bg-gradient-to-br from-indigo-500/10 to-transparent flex flex-col md:flex-row justify-between items-center gap-6">
+                <div>
+                    <h2 class="text-5xl font-black text-white italic tracking-tighter uppercase leading-none">
+                        {vehiculo.marca} <span class="text-slate-500">{vehiculo.modelo}</span>
+                    </h2>
+                    <p class="text-2xl font-mono text-indigo-400 mt-2 tracking-widest">{vehiculo.placa}</p>
+                </div>
+                <div class={`px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-[0.2em] border shadow-xl ${isDentro ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'}`}>
+                    {isDentro ? '● Vehículo en Planta' : '○ Vehículo Retirado'}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3">
+                <div class="p-8 border-r border-white/10 bg-black/20">
+                    <div class="relative group h-72 rounded-[2rem] overflow-hidden border border-white/5 bg-slate-900 shadow-inner">
+                        <img 
+                            src={registro.foto_url || '/placeholder-car.jpg'} 
+                            alt="Evidencia" 
+                            class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                            onerror="this.src='https://placehold.co/600x400/0f172a/6366f1?text=Sin+Foto'"
+                        />
+                        <div class="absolute bottom-4 left-4 right-4 py-2 px-4 bg-black/60 backdrop-blur-md border border-white/10 rounded-xl">
+                            <p class="text-[8px] font-black text-white uppercase tracking-widest text-center">Captura de Cámara</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-10 col-span-2 flex flex-col justify-center space-y-10">
+                    {isDentro ? (
+                        <div class="space-y-10">
+                            <div class="grid grid-cols-2 gap-6">
+                                <div class="bg-white/5 p-8 rounded-[2rem] border border-white/5 shadow-inner">
+                                    <span class="text-[10px] text-slate-500 font-black uppercase block mb-2 tracking-widest">Nivel Asignado</span>
+                                    <p class="text-5xl font-black text-white italic leading-none">0{registro.nivel}</p>
+                                </div>
+                                <div class="bg-indigo-500/5 p-8 rounded-[2rem] border border-indigo-500/20 shadow-inner">
+                                    <span class="text-[10px] text-indigo-400 font-black uppercase block mb-2 tracking-widest">Cajón Reservado</span>
+                                    <p class="text-5xl font-black text-white italic leading-none">#{registro.cajon}</p>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-col sm:flex-row gap-4">
+                                <button onclick="window.print()" class="flex-1 py-6 bg-white/5 border border-white/10 rounded-[1.5rem] font-black text-white uppercase text-[11px] tracking-widest hover:bg-white/10 transition-all active:scale-95">
+                                    🖨️ Imprimir Ticket
+                                </button>
+                                <button id="btn-finalizar-salida" class="flex-1 py-6 bg-red-600 rounded-[1.5rem] font-black text-white uppercase text-[11px] tracking-widest shadow-2xl shadow-red-600/30 hover:bg-red-500 transition-all active:scale-95">
+                                    🏁 Marcar Salida
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div class="bg-indigo-600/10 border border-indigo-500/20 p-10 rounded-[2.5rem] text-center space-y-4">
+                            <div class="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">🔄</div>
+                            <h3 class="text-white font-black text-xl uppercase italic tracking-tighter">Vehículo Fuera de Planta</h3>
+                            <p class="text-slate-400 text-xs font-bold uppercase leading-relaxed max-w-xs mx-auto">
+                                Para reingresar este vehículo, utilice el formulario de reingreso en el perfil de la placa o escanee nuevamente.
+                            </p>
+                            <div class="pt-4">
+                                <a href={`/vehiculo/${vehiculo.placa}`} class="text-indigo-400 font-black text-[10px] uppercase tracking-widest hover:text-white transition-colors">
+                                    Ver perfil completo de placa →
+                                </a>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white/5 border border-white/10 rounded-[3rem] p-10">
+            <h3 class="text-slate-500 font-black text-[10px] uppercase tracking-[0.3em] mb-8">Cronología de Actividad</h3>
+            <div class="space-y-4">
+                {historialCompleto.map((h) => (
+                    <div class="flex items-center justify-between p-5 bg-white/[0.02] border border-white/5 rounded-2xl group transition-all hover:bg-white/[0.05]">
+                        <div class="flex items-center gap-6">
+                            <div class={`w-2.5 h-2.5 rounded-full ${h.estado === 'dentro' ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.6)] animate-pulse' : 'bg-slate-700'}`}></div>
+                            <div>
+                                <p class="text-sm font-black text-white uppercase italic tracking-tighter">Nivel 0{h.nivel} <span class="text-slate-600 mx-2">/</span> Cajón #{h.cajon}</p>
+                                <p class="text-[10px] font-mono text-slate-500 mt-1">{new Date(h.fecha_ingreso).toLocaleString('es-MX')}</p>
+                            </div>
+                        </div>
+                        {h.id !== id && (
+                            <a href={`/registro/${h.id}`} class="px-4 py-2 rounded-xl bg-white/5 text-[9px] font-black text-indigo-400 uppercase opacity-0 group-hover:opacity-100 transition-all hover:bg-indigo-500 hover:text-white">
+                                Detalles
+                            </a>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+</Layout>
+
+<script define:vars={{ id, API_BASE_URL }}>
+    const btnSalida = document.getElementById('btn-finalizar-salida');
+
+    if (btnSalida) {
+        btnSalida.addEventListener('click', async () => {
+            if (!confirm("¿Registrar salida oficial del vehículo? El cajón quedará libre.")) return;
+            
+            btnSalida.disabled = true;
+            btnSalida.innerText = "PROCESANDO...";
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/registrar-salida/${id}`, { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    alert("Error al procesar la salida en el servidor.");
+                    btnSalida.disabled = false;
+                    btnSalida.innerText = "Marcar Salida";
+                }
+            } catch (e) {
+                alert("Error crítico de conexión.");
+                btnSalida.disabled = false;
+                btnSalida.innerText = "Marcar Salida";
+            }
+        });
+    }
+
+    // Efecto de feedback para botones
+    document.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('mousedown', () => btn.style.transform = 'scale(0.96)');
+        btn.addEventListener('mouseup', () => btn.style.transform = 'scale(1)');
+    });
+</script>
+
+<style>
+    @media print {
+        .no-print { display: none !important; }
+        .print-only { display: flex !important; }
+        body { background: white !important; margin: 0; padding: 0; }
+    }
+    .print-only { display: none; }
+</style>

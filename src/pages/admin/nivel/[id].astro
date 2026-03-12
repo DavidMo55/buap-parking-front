@@ -1,0 +1,104 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+
+export const prerender = false;
+
+const { id } = Astro.params; // Este es el nivel (1, 2, 3)
+const nivelNumero = parseInt(id);
+const API_URL = import.meta.env.PUBLIC_API_URL || "http://localhost:8000";
+
+let slots = [];
+let disponibles = 0;
+let ocupadosCount = 0;
+let error = null;
+
+try {
+    const res = await fetch(`${API_URL}/disponibilidad/${nivelNumero}`);
+    if (!res.ok) throw new Error("No se pudo conectar con la API");
+    
+    const data = await res.json();
+    // Importante: El backend debe enviar 'id' dentro de cada objeto de ocupados_detalle
+    const ocupadosDetalle = data.ocupados_detalle || [];
+
+    slots = Array.from({ length: 20 }, (_, i) => {
+        const numeroCajon = i + 1;
+        const infoVehiculo = ocupadosDetalle.find(o => o.cajon === numeroCajon);
+        
+        if (infoVehiculo) ocupadosCount++;
+        
+        return {
+            number: numeroCajon,
+            isOccupied: !!infoVehiculo,
+            vehiculo: infoVehiculo || null
+        };
+    });
+
+    disponibles = 20 - ocupadosCount;
+
+} catch (e) {
+    error = e.message;
+    console.error("Error en mapa de nivel:", e);
+}
+---
+
+<Layout title={`Mapa Nivel ${id}`}>
+    <div class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div class="space-y-2">
+            <a href="/admin" class="group flex items-center gap-2 text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em] hover:text-white transition-all">
+                <span class="group-hover:-translate-x-1 transition-transform">←</span> Panel Administrativo
+            </a>
+            <h2 class="text-6xl font-black text-white italic uppercase tracking-tighter leading-none">
+                Nivel <span class="text-indigo-500">{id.padStart(2, '0')}</span>
+            </h2>
+        </div>
+
+        <div class="flex gap-4">
+            <div class="bg-white/5 border border-white/10 px-8 py-4 rounded-[2rem] backdrop-blur-xl shadow-xl text-center">
+                <span class="block text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Libres</span>
+                <p class="text-3xl font-black text-emerald-400 leading-none">{disponibles}</p>
+            </div>
+            <div class="bg-white/5 border border-white/10 px-8 py-4 rounded-[2rem] backdrop-blur-xl shadow-xl text-center">
+                <span class="block text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Ocupados</span>
+                <p class="text-3xl font-black text-indigo-400 leading-none">{ocupadosCount}</p>
+            </div>
+        </div>
+    </div>
+
+    {error ? (
+        <div class="bg-red-500/10 border border-red-500/20 p-8 rounded-[2.5rem] text-center">
+            <p class="text-red-400 font-bold uppercase tracking-widest text-xs">Error de conexión: {error}</p>
+        </div>
+    ) : (
+        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-5 mb-12">
+            {slots.map((slot) => (
+                <div class={`
+                    relative h-40 rounded-[2.8rem] border transition-all duration-500 flex flex-col items-center justify-center overflow-hidden group
+                    ${slot.isOccupied 
+                        ? 'bg-indigo-600/10 border-indigo-500/40 shadow-2xl shadow-indigo-900/20' 
+                        : 'bg-white/[0.02] border-white/10 border-dashed hover:border-indigo-500/30 hover:bg-white/5'}
+                `}>
+                    <span class={`absolute top-5 left-7 text-[10px] font-black tracking-widest transition-colors ${slot.isOccupied ? 'text-indigo-400' : 'text-slate-800'}`}>
+                        #{slot.number.toString().padStart(2, '0')}
+                    </span>
+                    
+                    {slot.isOccupied ? (
+                        /* CAMBIO AQUÍ: Usamos slot.vehiculo.id que es el UUID, NO el {id} del nivel */
+                        <a href={`/registro/${slot.vehiculo.id}`} class="flex flex-col items-center gap-2 w-full h-full justify-center group-hover:scale-105 transition-transform duration-500">
+                            <div class="text-4xl drop-shadow-[0_0_15px_rgba(99,102,241,0.5)] transform -rotate-3 group-hover:rotate-0 transition-transform">🚗</div>
+                            <div class="text-center px-2">
+                                <p class="text-[11px] font-mono font-bold text-white tracking-[0.2em] leading-none uppercase">
+                                    {slot.vehiculo.placa}
+                                </p>
+                                <span class="text-[8px] font-black text-indigo-400 uppercase tracking-widest mt-2 block opacity-0 group-hover:opacity-100 transition-opacity">Gestionar</span>
+                            </div>
+                        </a>
+                    ) : (
+                        <div class="flex flex-col items-center gap-1 opacity-10 group-hover:opacity-30 transition-all">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Libre</span>
+                        </div>
+                    )}
+                </div>
+            ))}
+        </div>
+    )}
+</Layout>
